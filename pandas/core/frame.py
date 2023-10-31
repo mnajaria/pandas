@@ -5182,6 +5182,49 @@ class DataFrame(NDFrame, OpsMixin):
     def _series(self):
         return {item: self._ixs(idx, axis=1) for idx, item in enumerate(self.columns)}
 
+    def lookup(self, row_labels, col_labels, col_not_exist='ignore') -> np.ndarray:
+        """
+        Label-based "fancy indexing" function for DataFrame.
+
+        Given equal-length arrays of row and column labels, return an
+        array of the values corresponding to each (row, col) pair.
+
+        Parameters
+        ----------
+        row_labels : sequence
+            The row labels to use for lookup.
+        col_labels : sequence
+            The column labels to use for lookup.
+        col_not_exist : string
+            if there are col_labels that do not exist in the columns, replace with NaN
+        Returns
+        -------
+        numpy.ndarray
+            The found lookup values.
+        """
+        if len(row_labels) != len(col_labels):
+            raise ValueError("Row labels must have same size as column labels")
+        if not (self.index.is_unique and self.columns.is_unique):
+            # GH#33041
+            raise ValueError("DataFrame.lookup requires unique index and columns")
+
+        ridx = self.index.get_indexer(row_labels)
+        cidx = self.columns.get_indexer(col_labels)
+        if (ridx == -1).any():
+            raise KeyError("One or more row labels was not found")
+        if (cidx == -1).any():
+            if col_not_exist=='ignore':
+                # in the case the column does not exist, return NaN
+                # for this purpose we create a dummy column LastColNa
+                # the index -1 will pick from this column
+                self['LastColNa']=np.nan
+
+        else:
+            raise KeyError("One or more column labels was not found")
+
+        result = self.to_numpy()[ridx,cidx]
+
+        return result
     # ----------------------------------------------------------------------
     # Reindexing and alignment
 
